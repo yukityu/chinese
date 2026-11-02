@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>重組句子小遊戲 - Sentence Rearrange Quiz</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- Google Fonts for Friendly Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Fredoka', 'Noto Sans TC', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+
+    /* Bounce & Wobble animations */
+    @keyframes bounce-gentle {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    @keyframes pulse-glow {
+      0%, 100% { box-shadow: 0 0 15px rgba(251, 191, 36, 0.4); }
+      50% { box-shadow: 0 0 25px rgba(251, 191, 36, 0.8); }
+    }
+
+    .animate-bounce-gentle {
+      animation: bounce-gentle 2s infinite ease-in-out;
+    }
+
+    .pulse-glow {
+      animation: pulse-glow 2s infinite ease-in-out;
+    }
+
+    /* Word Card Dragging & Hover Styling */
+    .word-card {
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: grab;
+    }
+
+    .word-card:active {
+      cursor: grabbing;
+      transform: scale(1.08) rotate(3deg);
+    }
+
+    .word-card.dragging {
+      opacity: 0.4;
+      transform: scale(0.95);
+    }
+
+    /* Drop Zone Target Highlight */
+    .drop-target-active {
+      background-color: #fef08a !important;
+      border-color: #f59e0b !important;
+      transform: scale(1.02);
+    }
+
+    /* Custom Scrollbar for level list */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+      border-radius: 8px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-b from-sky-200 via-purple-100 to-pink-200 min-h-screen flex flex-col justify-between text-slate-800">
+
+  <!-- TOP NAV BAR -->
+  <header class="w-full max-w-4xl mx-auto p-4 flex justify-between items-center">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-2xl bg-amber-400 border-4 border-amber-300 flex items-center justify-center text-2xl shadow-md transform hover:rotate-12 transition">
+        🧩
+      </div>
+      <div>
+        <h1 class="text-2xl md:text-3xl font-black text-amber-900 tracking-wide drop-shadow-sm">重組句子小遊戲</h1>
+        <p class="text-xs md:text-sm font-bold text-amber-700">Sentence Rearrange Quiz</p>
+      </div>
+    </div>
+
+    <!-- Score & Action Buttons -->
+    <div class="flex items-center gap-2 md:gap-4">
+      <div class="bg-white/90 backdrop-blur border-2 border-amber-300 px-4 py-2 rounded-2xl shadow-sm flex items-center gap-2">
+        <span class="text-2xl">⭐</span>
+        <span id="scoreDisplay" class="text-xl md:text-2xl font-black text-amber-600">0 / 0</span>
+      </div>
+      <button id="openCustomModalBtn" class="bg-white hover:bg-amber-50 border-2 border-amber-300 p-2.5 rounded-2xl text-amber-700 font-bold transition shadow-sm flex items-center gap-1 text-sm md:text-base">
+        ⚙️ <span class="hidden sm:inline">自訂句子</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN GAME AREA -->
+  <main class="w-full max-w-4xl mx-auto px-4 py-2 flex-1 flex flex-col justify-center items-center gap-6">
+
+    <!-- LEVEL SELECTION STRIP -->
+    <div class="w-full bg-white/70 backdrop-blur rounded-2xl p-3 border-2 border-white/80 shadow-sm flex items-center gap-2 overflow-x-auto" id="levelContainer">
+      <!-- Generated Level Buttons will go here -->
+    </div>
+
+    <!-- MAIN GAME CARD -->
+    <div class="w-full bg-white rounded-3xl p-6 md:p-8 shadow-xl border-4 border-white/90 flex flex-col gap-6 relative overflow-hidden">
+
+      <!-- Decorative Header Badge -->
+      <div class="flex justify-between items-center">
+        <div class="inline-flex items-center gap-2 bg-purple-100 text-purple-700 font-bold px-4 py-1.5 rounded-full text-sm">
+          <span>🎯</span> <span id="currentLevelText">第 1 題</span>
+        </div>
+        
+        <!-- Speak Sentence Button -->
+        <button id="speakBtn" title="讀出句子" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold px-4 py-1.5 rounded-full text-sm flex items-center gap-2 transition active:scale-95">
+          🔊 <span>聽聽讀音</span>
+        </button>
+      </div>
+
+      <!-- INSTRUCTION HINT -->
+      <div class="text-center">
+        <p class="text-lg md:text-xl font-black text-slate-700">請把下面的詞語拉到橫線上，組成完整的句子：</p>
+        <p class="text-xs md:text-sm text-slate-400 mt-1">Drag or tap the words below into the box to form the correct sentence!</p>
+      </div>
+
+      <!-- DROP ZONE AREA (TARGET SENTENCE BOARD) -->
+      <div class="w-full min-h-[110px] bg-sky-50 border-3 border-dashed border-sky-300 rounded-2xl p-4 flex flex-wrap items-center justify-start gap-3 transition-colors duration-300 relative" id="dropZone">
+        <div id="dropPlaceholder" class="absolute inset-0 flex items-center justify-center text-sky-400 font-bold pointer-events-none text-base md:text-lg">
+          👉 拖放或點擊詞語卡片放置在這裡...
+        </div>
+      </div>
+
+      <!-- SOURCE WORDS POOL -->
+      <div class="w-full min-h-[100px] bg-slate-50 border-2 border-slate-200 rounded-2xl p-4 flex flex-wrap items-center justify-center gap-3" id="wordPool">
+        <!-- Word Cards will be dynamically inserted here -->
+      </div>
+
+      <!-- CONTROL & FEEDBACK BUTTONS -->
+      <div class="flex flex-wrap items-center justify-between gap-4 pt-2">
+        <button id="resetBtn" class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-5 py-3 rounded-2xl transition active:scale-95 flex items-center gap-2 text-sm md:text-base">
+          🔄 重設 (Reset)
+        </button>
+
+        <div class="flex gap-3 ml-auto">
+          <button id="checkBtn" class="bg-amber-400 hover:bg-amber-500 text-amber-950 font-black px-8 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition transform active:scale-95 flex items-center gap-2 text-base md:text-lg border-b-4 border-amber-600">
+            ✅ 檢查答案 (Check)
+          </button>
+          
+          <button id="nextBtn" class="hidden bg-emerald-500 hover:bg-emerald-600 text-white font-black px-8 py-3.5 rounded-2xl shadow-lg hover:shadow-xl transition transform active:scale-95 items-center gap-2 text-base md:text-lg border-b-4 border-emerald-700 animate-bounce-gentle">
+            下一題 🎉 (Next)
+          </button>
+        </div>
+      </div>
+
+      <!-- BANNER FEEDBACK MESSAGE -->
+      <div id="feedbackBanner" class="hidden rounded-2xl p-4 text-center font-black text-lg md:text-xl transition-all duration-300 transform scale-95 opacity-0">
+      </div>
+
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="w-full text-center py-4 text-xs font-bold text-slate-500">
+    重組句子小遊戲 Sentence Rearranging Game &bull; Perfect for Kids Aged 4-8
+  </footer>
+
+  <!-- CUSTOM SENTENCE MODAL -->
+  <div id="customModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl border-4 border-amber-300 flex flex-col gap-5">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h2 class="text-xl font-black text-amber-900 flex items-center gap-2">
+          ✏️ 新增自訂句子 (Add Sentence)
+        </h2>
+        <button id="closeCustomModalBtn" class="text-slate-400 hover:text-slate-600 font-bold text-2xl">
+          ✕
+        </button>
+      </div>
+
+      <p class="text-sm text-slate-600 font-bold">
+        請輸入句子，並用斜線 <code class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded border border-amber-300">/</code> 分隔詞語。<br>
+        <span class="text-xs text-slate-400 font-normal">例：我 / 喜歡 / 吃 / 蛋糕 / 。</span>
+      </p>
+
+      <div>
+        <label class="block text-xs font-bold text-slate-500 mb-1">句子內容：</label>
+        <input type="text" id="customInput" placeholder="我 / 喜歡 / 吃 / 蛋糕 / 。" class="w-full px-4 py-3 rounded-2xl border-2 border-slate-300 focus:border-amber-400 focus:outline-none font-bold text-lg text-slate-800">
+      </div>
+
+      <div class="flex justify-end gap-3 pt-2">
+        <button id="cancelCustomBtn" class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-5 py-2.5 rounded-xl transition">
+          取消
+        </button>
+        <button id="saveCustomBtn" class="bg-amber-400 hover:bg-amber-500 text-amber-950 font-black px-6 py-2.5 rounded-xl shadow transition">
+          加入題目 (Add)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // --- PRE-LOADED SENTENCES ---
+    const DEFAULT_SENTENCES = [
+      "我 / 喜歡 / 吃 / 蛋糕 / 。",
+      "貓咪 / 在 / 椅子上 / 睡覺 / 。",
+      "小狗 / 喜歡 / 在 / 公園 / 跑步 / 。",
+      "媽媽 / 帶 / 我 / 去 / 買 / 水果 / 。",
+      "太陽 / 從 / 東方 / 升起 / 。",
+      "妹妹 / 正在 / 認真 / 畫畫 / 。",
+      "我們 / 一起 / 玩 / 遊戲 / 吧 / ！"
+    ];
+
+    let sentenceList = [...DEFAULT_SENTENCES];
+    let currentIndex = 0;
+    let currentOriginalTokens = [];
+    let completedSet = new Set();
+    let draggedElement = null;
+
+    // --- SOUND EFFECTS (Web Audio API Synthesizer) ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(type) {
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      const now = audioCtx.currentTime;
+
+      if (type === 'click') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(800, now + 0.08);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (type === 'success') {
+        // Happy major chord arpeggio
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const noteOsc = audioCtx.createOscillator();
+          const noteGain = audioCtx.createGain();
+          noteOsc.type = 'triangle';
+          noteOsc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          noteGain.gain.setValueAtTime(0.3, now + idx * 0.08);
+          noteGain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.3);
+          noteOsc.connect(noteGain);
+          noteGain.connect(audioCtx.destination);
+          noteOsc.start(now + idx * 0.08);
+          noteOsc.stop(now + idx * 0.08 + 0.3);
+        });
+      } else if (type === 'error') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.setValueAtTime(180, now + 0.1);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+    }
+
+    // --- SPEECH SYNTHESIS (TTS) ---
+    function speakCurrentSentence() {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Stop active speech
+        const cleanText = currentOriginalTokens.join('');
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        utterance.lang = 'zh-HK'; // Cantonese / Traditional Chinese
+        utterance.rate = 0.85; // Slightly slower for kids
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    // --- SHUFFLE HELPER ---
+    function shuffleArray(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      // Ensure shuffle is not identical to correct answer (unless length is 1)
+      if (arr.join('') === array.join('') && arr.length > 1) {
+        return shuffleArray(array);
+      }
+      return arr;
+    }
+
+    // --- GAME INITIALIZATION ---
+    function initGame() {
+      renderLevelButtons();
+      loadLevel(0);
+      setupEventListeners();
+    }
+
+    // Render level selector tabs
+    function renderLevelButtons() {
+      const levelContainer = document.getElementById('levelContainer');
+      levelContainer.innerHTML = '';
+
+      sentenceList.forEach((_, idx) => {
+        const btn = document.createElement('button');
+        const isCompleted = completedSet.has(idx);
+        const isActive = idx === currentIndex;
+
+        btn.className = `px-3.5 py-1.5 rounded-xl font-bold text-sm whitespace-nowrap transition flex items-center gap-1 ${
+          isActive 
+            ? 'bg-amber-400 text-amber-950 shadow-md scale-105 border-2 border-amber-500' 
+            : isCompleted 
+              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+        }`;
+        
+        btn.innerHTML = `${isCompleted ? '⭐' : ''} 第 ${idx + 1} 題`;
+        btn.addEventListener('click', () => {
+          playSound('click');
+          loadLevel(idx);
+        });
+        levelContainer.appendChild(btn);
+      });
+
+      // Update Top Score Display
+      document.getElementById('scoreDisplay').innerText = `${completedSet.size} / ${sentenceList.length}`;
+    }
+
+    // Load Level Question
+    function loadLevel(index) {
+      currentIndex = index;
+      const rawSentence = sentenceList[index];
+
+      // Parse tokens separated by '/'
+      currentOriginalTokens = rawSentence.split('/').map(s => s.trim()).filter(Boolean);
+
+      // DOM Elements
+      document.getElementById('currentLevelText').innerText = `第 ${index + 1} 題 (Question ${index + 1})`;
+      
+      const wordPool = document.getElementById('wordPool');
+      const dropZone = document.getElementById('dropZone');
+      const feedbackBanner = document.getElementById('feedbackBanner');
+      const nextBtn = document.getElementById('nextBtn');
+      const checkBtn = document.getElementById('checkBtn');
+
+      // Clear layout
+      wordPool.innerHTML = '';
+      
+      // Clean dropZone except placeholder
+      const placeholder = document.getElementById('dropPlaceholder');
+      dropZone.innerHTML = '';
+      dropZone.appendChild(placeholder);
+      placeholder.style.display = 'flex';
+
+      // Hide Feedback & Reset Buttons
+      feedbackBanner.className = 'hidden rounded-2xl p-4 text-center font-black text-lg transition-all duration-300 opacity-0 scale-95';
+      nextBtn.classList.add('hidden');
+      nextBtn.classList.remove('flex');
+      checkBtn.classList.remove('hidden');
+
+      // Shuffle tokens for child to unscramble
+      const shuffled = shuffleArray(currentOriginalTokens);
+
+      // Distinct color palettes for word tiles to make them vibrant for kids
+      const colorPalettes = [
+        'bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-200',
+        'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200',
+        'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200',
+        'bg-sky-100 text-sky-800 border-sky-300 hover:bg-sky-200',
+        'bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200',
+        'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200'
+      ];
+
+      shuffled.forEach((word, i) => {
+        const isPunctuation = /[。！？,.!?]/.test(word);
+        const card = document.createElement('div');
+        
+        // Pick dynamic color based on token index or punctuation
+        const palette = isPunctuation 
+          ? 'bg-pink-100 text-pink-800 border-pink-400 font-black' 
+          : colorPalettes[i % colorPalettes.length];
+
+        card.className = `word-card ${palette} border-2 md:border-3 px-4 md:px-6 py-2.5 md:py-3.5 rounded-2xl font-black text-xl md:text-3xl shadow-md cursor-pointer select-none flex items-center justify-center transform hover:-translate-y-1`;
+        card.innerText = word;
+        card.setAttribute('draggable', 'true');
+        card.dataset.word = word;
+
+        // Attach Card Listeners (Drag & Tap)
+        attachCardEvents(card);
+
+        wordPool.appendChild(card);
+      });
+
+      renderLevelButtons();
+    }
+
+    // --- CARD EVENTS (TAP + DRAG) ---
+    function attachCardEvents(card) {
+      // Tap/Click to move between pool and drop zone
+      card.addEventListener('click', () => {
+        playSound('click');
+        const dropZone = document.getElementById('dropZone');
+        const wordPool = document.getElementById('wordPool');
+
+        if (card.parentElement === wordPool) {
+          dropZone.appendChild(card);
+        } else {
+          wordPool.appendChild(card);
+        }
+        updatePlaceholderVisibility();
+      });
+
+      // Drag and Drop Standard API
+      card.addEventListener('dragstart', (e) => {
+        draggedElement = card;
+        card.classList.add('dragging');
+        e.dataTransfer.setData('text/plain', card.dataset.word);
+      });
+
+      card.addEventListener('dragend', () => {
+        draggedElement = null;
+        card.classList.remove('dragging');
+      });
+    }
+
+    // --- DROP ZONE & CONTAINERS EVENT HANDLING ---
+    function setupEventListeners() {
+      const dropZone = document.getElementById('dropZone');
+      const wordPool = document.getElementById('wordPool');
+
+      [dropZone, wordPool].forEach(container => {
+        container.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          container.classList.add('drop-target-active');
+        });
+
+        container.addEventListener('dragleave', () => {
+          container.classList.remove('drop-target-active');
+        });
+
+        container.addEventListener('drop', (e) => {
+          e.preventDefault();
+          container.classList.remove('drop-target-active');
+          if (draggedElement) {
+            playSound('click');
+            container.appendChild(draggedElement);
+            updatePlaceholderVisibility();
+          }
+        });
+      });
+
+      // Controls
+      document.getElementById('checkBtn').addEventListener('click', checkAnswer);
+      document.getElementById('resetBtn').addEventListener('click', () => {
+        playSound('click');
+        loadLevel(currentIndex);
+      });
+      document.getElementById('nextBtn').addEventListener('click', () => {
+        playSound('click');
+        if (currentIndex < sentenceList.length - 1) {
+          loadLevel(currentIndex + 1);
+        } else {
+          loadLevel(0); // Cycle back to first
+        }
+      });
+
+      document.getElementById('speakBtn').addEventListener('click', speakCurrentSentence);
+
+      // Custom Sentence Modal Triggers
+      const customModal = document.getElementById('customModal');
+      document.getElementById('openCustomModalBtn').addEventListener('click', () => {
+        playSound('click');
+        customModal.classList.remove('hidden');
+      });
+      document.getElementById('closeCustomModalBtn').addEventListener('click', () => {
+        customModal.classList.add('hidden');
+      });
+      document.getElementById('cancelCustomBtn').addEventListener('click', () => {
+        customModal.classList.add('hidden');
+      });
+
+      document.getElementById('saveCustomBtn').addEventListener('click', addCustomSentence);
+    }
+
+    // Check Placeholder state inside drop zone
+    function updatePlaceholderVisibility() {
+      const dropZone = document.getElementById('dropZone');
+      const placeholder = document.getElementById('dropPlaceholder');
+      const cardsInDropZone = dropZone.querySelectorAll('.word-card');
+
+      if (cardsInDropZone.length > 0) {
+        placeholder.style.display = 'none';
+      } else {
+        placeholder.style.display = 'flex';
+      }
+    }
+
+    // --- CHECK ANSWER VALIDATION ---
+    function checkAnswer() {
+      const dropZone = document.getElementById('dropZone');
+      const currentCards = Array.from(dropZone.querySelectorAll('.word-card'));
+      const userTokens = currentCards.map(c => c.dataset.word);
+      const feedbackBanner = document.getElementById('feedbackBanner');
+
+      // Check if user has placed all tokens
+      if (userTokens.length < currentOriginalTokens.length) {
+        playSound('error');
+        showBanner('⚠️ 還有詞語還未放入框內喔！請繼續組合～', 'bg-amber-100 text-amber-800 border-2 border-amber-300');
+        return;
+      }
+
+      const isCorrect = userTokens.join('') === currentOriginalTokens.join('');
+
+      if (isCorrect) {
+        playSound('success');
+        completedSet.add(currentIndex);
+        renderLevelButtons();
+
+        // Confetti celebration effect
+        if (typeof confetti === 'function') {
+          confetti({
+            particleCount: 80,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+        }
+
+        showBanner('🎉 太棒了！答對了！你真聰明！(Correct!)', 'bg-emerald-100 text-emerald-800 border-2 border-emerald-400');
+        
+        // Automatically speak full sentence on success
+        setTimeout(() => speakCurrentSentence(), 400);
+
+        // Toggle buttons
+        document.getElementById('checkBtn').classList.add('hidden');
+        const nextBtn = document.getElementById('nextBtn');
+        nextBtn.classList.remove('hidden');
+        nextBtn.classList.add('flex');
+
+      } else {
+        playSound('error');
+        showBanner('❌ 再試一次吧！檢查一下詞語順序喔～ (Try Again)', 'bg-rose-100 text-rose-800 border-2 border-rose-300');
+      }
+    }
+
+    // Display status banner
+    function showBanner(message, styles) {
+      const feedbackBanner = document.getElementById('feedbackBanner');
+      feedbackBanner.innerText = message;
+      feedbackBanner.className = `w-full rounded-2xl p-4 text-center font-black text-lg md:text-xl transition-all duration-300 transform scale-100 opacity-100 ${styles}`;
+      feedbackBanner.classList.remove('hidden');
+    }
+
+    // --- ADD CUSTOM SENTENCE ---
+    function addCustomSentence() {
+      const input = document.getElementById('customInput');
+      const val = input.value.trim();
+
+      if (!val || !val.includes('/')) {
+        alert('請輸入有效的句子，並以 "/" 隔開詞語！\n範例: 我 / 喜歡 / 吃 / 蛋糕 / 。');
+        return;
+      }
+
+      sentenceList.push(val);
+      input.value = '';
+      document.getElementById('customModal').classList.add('hidden');
+      playSound('success');
+
+      // Load newly added level
+      loadLevel(sentenceList.length - 1);
+    }
+
+    // Run game on page ready
+    window.addEventListener('DOMContentLoaded', initGame);
+  </script>
+</body>
+</html>
